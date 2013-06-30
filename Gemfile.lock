@@ -1,0 +1,12 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    multipart-post (1.2.0)
+    simple_oauth (0.2.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  multipart-post
+  simple_oauth
