@@ -23,7 +23,7 @@ def select_image
   dialog.preview_widget = Gtk::Image.new
   dialog.signal_connect("update-preview") do
     if dialog.preview_filename && !File.directory?(dialog.preview_filename)
-      dialog.preview_widget.set_pixbuf(Gdk::Pixbuf.new(dialog.preview_filename, 128, 128))
+      dialog.preview_widget.set_pixbuf(Gdk::Pixbuf.new(dialog.preview_filename, 200, 200))
       dialog.set_preview_widget_active(true)
     else
       dialog.set_preview_widget_active(false)
@@ -40,30 +40,24 @@ def select_image
   return filename
 end
 
-def upload(url, filename, options)
-  uri = URI.parse(url)
+def upload(api_url, filename, options)
   provider = "https://api.twitter.com/1.1/account/verify_credentials.json"
-  keys = {consumer_key: CHIConfig::TWITTER_CONSUMER_KEY,
-          consumer_secret: CHIConfig::TWITTER_CONSUMER_SECRET,
-          token: UserConfig[:twitter_token],
-          token_secret: UserConfig[:twitter_secret]}
+  oauth = {consumer_key: CHIConfig::TWITTER_CONSUMER_KEY,
+           consumer_secret: CHIConfig::TWITTER_CONSUMER_SECRET,
+           token: UserConfig[:twitter_token],
+           token_secret: UserConfig[:twitter_secret]}
+  h = SimpleOAuth::Header.new("GET", provider, {}, oauth)
 
-  Net::HTTP.start(uri.host, uri.port) do |http|
-    params = options.merge({media: UploadIO.new(filename,
-                                                "application/octet-stream",
-                                                File.basename(filename))})
-
-    req = Net::HTTP::Post::Multipart.new(uri.path, params)
-
-    h = SimpleOAuth::Header.new("GET", provider, {}, keys)
-    req["X-Auth-Service-Provider"] = provider
-    req["X-Verify-Credentials-Authorization"] = "OAuth realm=\"http://api.twitter.com/\", " +
-                                                h.__send__(:normalized_attributes)
-    return http.request(req).body
-  end
+  uri = URI.parse(api_url)
+  params = options.merge(media: UploadIO.new(filename, "application/octet-stream", File.basename(filename)))
+  req = Net::HTTP::Post::Multipart.new(uri.path, params)
+  req["X-Auth-Service-Provider"] = provider
+  req["X-Verify-Credentials-Authorization"] = "OAuth realm=\"http://api.twitter.com/\", " +
+                                              h.__send__(:normalized_attributes)
+  Net::HTTP.new(uri.host, uri.port).request(req)
 end
 
-def create_command(name, slug, url, options = {}, &parse)
+def create_command(name, slug, api_url, options = {}, &parse)
   command("upload_to_#{slug}".to_sym,
           name: "画像を#{name}にアップロードする",
           condition: -> _ { true },
@@ -73,11 +67,13 @@ def create_command(name, slug, url, options = {}, &parse)
       filename = select_image
 
       if filename
-        body = upload(url, filename, options)
-        url = parse.call(body)
-        Plugin.create(:gtk).widgetof(opt.widget).widget_post.buffer.text += " " + url
+        res = upload(api_url, filename, options)
+        image_url = parse.call(res.body)
+        Plugin.create(:gtk).widgetof(opt.widget).widget_post.buffer.text += " " + image_url
       end
     rescue Exception => e
+      p $!
+      p $@
       Plugin.call(:update, nil, [Message.new(message: e.to_s, system: true)])
     end
   end
@@ -85,7 +81,7 @@ end
 
 
 Plugin.create :image_upload do
-  create_command("ついっぷるフォト", "twipple_photo", "http://p.twipple.jp/api/upload2") do |body|
+  create_command("ついっぷるフォト", "twipple_photo", "http://p.twipple.jp/api/upload2", upload_from: "mikutter") do |body|
     REXML::XPath.first(REXML::Document.new(body), "//rsp/mediaurl").text
   end
   create_command("yfrog", "yfrog", "http://yfrog.com/api/xauth_upload", key: "278EMSVYb5f62c5e59793ab2df33315ab6041498") do |body|
