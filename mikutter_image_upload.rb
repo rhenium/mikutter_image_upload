@@ -42,10 +42,10 @@ end
 
 def upload(api_url, filename, options)
   provider = "https://api.twitter.com/1.1/account/verify_credentials.json"
-  oauth = {consumer_key: CHIConfig::TWITTER_CONSUMER_KEY,
-           consumer_secret: CHIConfig::TWITTER_CONSUMER_SECRET,
-           token: UserConfig[:twitter_token],
-           token_secret: UserConfig[:twitter_secret]}
+  oauth = {consumer_key: Service.primary.consumer_key,
+           consumer_secret: Service.primary.consumer_secret,
+           token: Service.primary.a_token,
+           token_secret: Service.primary.a_secret}
   h = SimpleOAuth::Header.new("GET", provider, {}, oauth)
 
   uri = URI.parse(api_url)
